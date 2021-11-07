@@ -9,17 +9,26 @@ import org.springframework.security.config.annotation.authentication.builders.Au
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.filter.CharacterEncodingFilter;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.sql.DataSource;
+import java.io.IOException;
 
 @Configuration
 @EnableWebSecurity
-public class AuthConfig extends WebSecurityConfigurerAdapter{
+public class AuthConfig extends WebSecurityConfigurerAdapter implements WebMvcConfigurer {
     @Autowired
     private UserDetailsService UserDetailsService;
 
@@ -44,17 +53,41 @@ public class AuthConfig extends WebSecurityConfigurerAdapter{
         http
                 .httpBasic().and()
                 .authorizeRequests()
-                .anyRequest().permitAll()
+                .antMatchers("/hello").authenticated()
+                .antMatchers("/auth/*").permitAll()
                 .and()
                 .formLogin()
                 .loginProcessingUrl("/auth/login")
                 .and()
                 .logout()
                 .logoutUrl("/auth/logout")
+                .logoutSuccessHandler(new LogoutSuccessHandler() {
+                    @Override
+                    public void onLogoutSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+                        if (authentication != null && authentication.getDetails() != null) {
+                            try {
+                                request.getSession().invalidate();
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                                e = null;
+                            }
+                        }
+                        response.setStatus(HttpServletResponse.SC_OK);
+                    }
+                })
+                .deleteCookies("JSESSIONID")
+                .invalidateHttpSession(false)
+                .permitAll()
                 .and()
                 .exceptionHandling()
                 .and()
                 .csrf().disable();
-        http.cors().disable();
+    }
+
+    @Override
+    public void addCorsMappings(CorsRegistry registry) {
+        registry.addMapping("/**")
+                .allowedOrigins("*")
+                .allowedMethods("*");
     }
 }
